@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DepEd IDLAR Generator (Annex D)</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    
+    <!-- html2pdf for PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            850: '#1e293b', // Custom dark for navbar
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Serif:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9; /* Slate-100 */
+        }
+
+        /* Paper Preview Styling */
+        .paper-preview {
+            font-family: 'Times New Roman', Times, serif; 
+            background: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            padding: 40px;
+            width: 100%;
+            max-width: 8.5in;
+            min-height: 11in;
+            margin: 0 auto;
+            color: black;
+            box-sizing: border-box;
+        }
+
+        .paper-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .paper-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .paper-table th, .paper-table td {
+            border: 1px solid black;
+            padding: 8px;
+            vertical-align: top;
+            font-size: 11pt;
+        }
+
+        .paper-table th {
+            background-color: #f9fafb;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        /* Help Icon Styling */
+        .help-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background-color: #94a3b8;
+            color: white;
+            font-size: 10px;
+            cursor: help;
+            margin-left: 6px;
+        }
+
+        .help-icon:hover {
+            background-color: #475569;
+        }
+
+        /* Hide the internal text by default, JS reads it */
+        .help-icon .help-content {
+            display: none;
+        }
+
+        /* Button Tooltips */
+        .btn-tooltip {
+            position: relative;
+        }
+        
+        .btn-tooltip::before {
+            content: attr(data-tooltip);
+            visibility: hidden;
+            position: absolute;
+            top: 115%; /* FIX: Positioned below the button */
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 6px 10px;
+            border-radius: 4px;
+            background-color: #1e293b;
+            color: white;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none;
+            z-index: 50;
+        }
+        
+        .btn-tooltip:hover::before {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Hide elements during print/pdf generation */
+        .no-print {
+            display: inherit;
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .paper-preview {
+                box-shadow: none;
+                padding: 0;
+                margin: 0;
+                width: 100%;
+                max-width: none;
+            }
+            @page {
+                margin: 0.5in;
+            }
+        }
+    </style>
+</head>
+<body class="text-slate-800 md:h-screen flex flex-col md:overflow-hidden">
+
+    <!-- Navbar -->
+    <nav class="bg-slate-850 text-white p-4 shadow-md z-20 no-print flex justify-between items-center shrink-0 border-b border-slate-700">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-blue-700 rounded-lg flex items-center justify-center shadow-lg">
+                <i class="fas fa-file-contract text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold tracking-tight">DepEd IDLAR Generator</h1>
+                <p class="text-xs text-slate-300 hidden md:block">Individual Daily Log & Accomplishment Report</p>
+            </div>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="app.resetForm()" class="btn-tooltip bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-sm font-medium transition shadow-sm border border-blue-500" data-tooltip="Start a fresh report for a new month">
+                <i class="fas fa-plus mr-2"></i>New Report
+            </button>
+            <button onclick="app.toggleHistory()" class="btn-tooltip bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm font-medium transition shadow-sm border border-slate-600" data-tooltip="View saved reports and backups">
+                <i class="fas fa-history mr-2"></i>History
+            </button>
+            <button onclick="app.toggleGuide()" class="btn-tooltip bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-sm font-medium transition shadow-sm border border-emerald-500" data-tooltip="Learn how to use this app">
+                <i class="fas fa-book mr-2"></i>Guide
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="flex flex-col md:flex-row flex-1 md:overflow-hidden relative">
+        
+        <!-- Left Sidebar: Controls -->
+        <div class="w-full md:w-1/3 lg:w-1/4 bg-white border-r border-slate-200 overflow-y-auto p-5 no-print flex flex-col gap-6 shadow-xl z-10 shrink-0">
+            
+            <!-- Section 1: Personnel Info -->
+            <div class="space-y-4">
+                <div class="flex items-center border-b border-slate-100 pb-2">
+                    <h2 class="font-bold text-slate-800 text-sm uppercase tracking-wide flex-1"><i class="fas fa-user-tie mr-2 text-blue-600"></i>Personnel Info</h2>
+                    <span class="help-icon">
+                        <i class="fas fa-question"></i>
+                        <span class="help-content">Enter your personal details here. These fields automatically populate the header of Annex D.</span>
+                    </span>
+                </div>
+                
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="col-span-1">
+                        <label class="text-xs font-bold text-slate-500 uppercase">First Name</label>
+                        <input type="text" id="firstName" class="w-full border border-slate-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="Juan" oninput="app.updatePreview()">
+                    </div>
+                    <div class="col-span-1">
+                        <label class="text-xs font-bold text-slate-500 uppercase">M.I.</label>
+                        <input type="text" id="middleInit" class="w-full border border-slate-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="D." oninput="app.updatePreview()">
+                    </div>
+                    <div class="col-span-1">
+                        <label class="text-xs font-bold text-slate-500 uppercase">Last Name</label>
+                        <input type="text" id="lastName" class="w-full border border-slate-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="Dela Cruz" oninput="app.updatePreview()">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-slate-500 uppercase">Position</label>
+                    <input type="text" id="position" class="w-full border border-slate-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="Project Development Officer II" oninput="app.updatePreview()">
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-slate-500 uppercase block mb-1">Service</label>
+                    <select id="service" class="w-full border border-slate-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition bg-white" onchange="app.handleServiceChange()">
+                        <option value="Information and Communications Technology Service" selected>Information and Communications Technology Service</option>
+                        <option value="Office of the Assistant Secretary for Information and Communications Technology">Office of the Assistant Secretary for ICT</option>
+                    </select>
+                </div>
+
+                <div>
+                    <div class="flex items-center mb-1">
+                        <label class="text-xs font-bold text-slate-500 uppercase">Division</label>
+                         <span class="help-icon">
+                            <i class="fas fa-question"></i>
+                            <span class="help-content">Divisions update automatically based on the selected Service.</span>
+                        </span>
+                    </div>
+                    <select id="division" class="w-full border border-slate-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition bg-white" onchange="app.updatePreview()">
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+
+                <div>
+                    <div class="flex items-center mb-1">
+                        <label class="text-xs font-bold text-slate-500 uppercase">Month Covered</label>
+                        <span class="help-icon">
+                            <i class="fas fa-question"></i>
+                            <span class="help-content">Select the Month and Year for this report. Valid from 2025 to 2035.</span>
+                        </span>
+                    </div>
+                    <!-- Dropdown Interface for Month/Year -->
+                    <div class="flex gap-2">
+                        <select id="selMonth" class="flex-1 border border-slate-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition bg-white" onchange="app.handleMonthChange()">
+                            <option value="01">January</option>
+                            <option value="02">February</option>
+                            <option value="03">March</option>
+                            <option value="04">April</option>
+                            <option value="05">May</option>
+                            <option value="06">June</option>
+                            <option value="07">July</option>
+                            <option value="08">August</option>
+                            <option value="09">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
+                        <select id="selYear" class="flex-1 border border-slate-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition bg-white" onchange="app.handleMonthChange()">
+                            <!-- Generated via JS -->
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 2: Daily Log Entry -->
+            <div class="space-y-4 pt-2">
+                <div class="flex items-center border-b border-slate-100 pb-2">
+                    <h2 class="font-bold text-slate-800 text-sm uppercase tracking-wide flex-1"><i class="fas fa-clock mr-2 text-blue-600"></i>Daily Log Entry</h2>
+                    <span class="help-icon">
+                        <i class="fas fa-question"></i>
+                        <span class="help-content">Log your WFH days here. Add accomplishments one by one to build a list, then click 'Add Entry to Report'.</span>
+                    </span>
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 shadow-sm">
+                    <div class="mb-3">
+                        <label class="text-xs font-bold text-slate-500 uppercase block mb-1">Date WFH</label>
+                        <input type="date" id="entryDate" class="w-full border border-slate-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                            <label class="text-xs font-bold text-slate-500 uppercase block mb-1">Time In</label>
+                            <div class="flex gap-1">
+                                <input type="time" id="entryTimeIn" class="w-full border border-slate-300 rounded p-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                <button onclick="app.setCurrentTime('entryTimeIn')" class="bg-emerald-600 text-white px-2 rounded hover:bg-emerald-700 transition" title="Set to Current Time"><i class="fas fa-play text-xs"></i></button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-500 uppercase block mb-1">Time Out</label>
+                            <div class="flex gap-1">
+                                <input type="time" id="entryTimeOut" class="w-full border border-slate-300 rounded p-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                <button onclick="app.setCurrentTime('entryTimeOut')" class="bg-rose-600 text-white px-2 rounded hover:bg-rose-700 transition" title="Set to Current Time"><i class="fas fa-stop text-xs"></i></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Accomplishment Builder -->
+                    <div class="mb-3">
+                        <label class="text-xs font-bold text-slate-500 uppercase block mb-1">Accomplishments</label>
+                        <div class="flex gap-1 mb-2">
+                            <input type="text" id="accInput" class="flex-1 border border-slate-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Type and press Enter..." onkeypress="app.handleAccEnter(event)">
+                            <button onclick="app.addTempAcc()" class="bg-slate-600 text-white px-3 rounded hover:bg-slate-700 text-xs font-bold transition">Add</button>
+                        </div>
+                        <!-- List of current items being added -->
+                        <ul id="tempAccList" class="text-xs text-slate-700 space-y-1 pl-1 max-h-32 overflow-y-auto">
+                            <!-- Items appear here -->
+                        </ul>
+                    </div>
+
+                    <button onclick="app.addEntry()" class="w-full bg-blue-600 text-white py-2.5 rounded text-sm font-semibold hover:bg-blue-700 transition shadow-sm btn-tooltip" data-tooltip="Confirm and add this day's log to the table">
+                        <i class="fas fa-plus-circle mr-2"></i> Add Entry to Report
+                    </button>
+                </div>
+            </div>
+
+            <!-- Section 3: Footer Details -->
+            <div class="space-y-4 pt-2">
+                 <div class="flex items-center border-b border-slate-100 pb-2">
+                    <h2 class="font-bold text-slate-800 text-sm uppercase tracking-wide flex-1"><i class="fas fa-signature mr-2 text-blue-600"></i>Signatories</h2>
+                    <span class="help-icon">
+                        <i class="fas fa-question"></i>
+                        <span class="help-content">Enter the details of the person who will attest (sign) your report.</span>
+                    </span>
+                </div>
+                
+                 <div>
+                    <label class="text-xs font-bold text-slate-500 uppercase">Submission Date</label>
+                    <input type="date" id="submitDate" class="w-full border border-slate-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" onchange="app.updatePreview()">
+                </div>
+
+                <div class="border-t border-slate-100 pt-3">
+                    <label class="text-xs font-bold text-slate-700 block mb-2">Attested By (Approver):</label>
+                    <input type="text" id="attestedName" class="w-full border border-slate-300 rounded p-2 text-sm mb-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Name of Chief/Director" oninput="app.updatePreview()">
+                    <input type="text" id="attestedPos" class="w-full border border-slate-300 rounded p-2 text-sm mb-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Position" oninput="app.updatePreview()">
+                    <!-- ADDED: Attested Office -->
+                    <input type="text" id="attestedOffice" class="w-full border border-slate-300 rounded p-2 text-sm mb-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Office / Division" oninput="app.updatePreview()">
+                    
+                    <label class="text-xs font-bold text-slate-500 uppercase mt-1 block">Date Signed</label>
+                    <input type="date" id="attestedDate" class="w-full border border-slate-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" onchange="app.updatePreview()">
+                </div>
+            </div>
+            
+            <!-- Actions -->
+             <div class="pt-6 border-t border-slate-200 pb-10">
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="app.saveReport()" class="btn-tooltip bg-slate-700 text-white py-2.5 rounded text-sm font-medium hover:bg-slate-800 transition" data-tooltip="Save this report to local history">
+                        <i class="fas fa-save mr-2"></i> Save Draft
+                    </button>
+                    <button onclick="app.downloadXLSX()" class="btn-tooltip bg-emerald-700 text-white py-2.5 rounded text-sm font-medium hover:bg-emerald-800 transition" data-tooltip="Download an editable Excel file">
+                        <i class="fas fa-file-excel mr-2"></i> Export Excel
+                    </button>
+                    <button onclick="app.downloadPDF()" class="btn-tooltip bg-rose-700 text-white py-2.5 rounded text-sm font-medium hover:bg-rose-800 transition col-span-2 shadow-sm" data-tooltip="Generate and download the printable PDF">
+                        <i class="fas fa-file-pdf mr-2"></i> Download PDF
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Side: Preview -->
+        <div class="flex-1 bg-slate-200 overflow-y-auto p-4 md:p-8 relative flex justify-center">
+            
+            <!-- The Paper Document -->
+            <div id="reportPreview" class="paper-preview transform origin-top scale-100">
+                <div class="paper-header">
+                    <p class="font-bold text-sm">Annex D</p>
+                    <h1 class="font-bold text-lg mt-2">INDIVIDUAL DAILY LOG AND ACCOMPLISHMENT REPORT</h1>
+                    <p class="font-bold text-md">(WORK FROM HOME)</p>
+                </div>
+
+                <div class="grid grid-cols-[150px_1fr] gap-y-2 text-sm mb-6 pl-4">
+                    <div class="font-bold">NAME</div>
+                    <div class="uppercase font-bold">: <span id="prevName"></span></div>
+                    
+                    <div class="font-bold">POSITION</div>
+                    <div>: <span id="prevPos"></span></div>
+                    
+                    <div class="font-bold">DIVISION</div>
+                    <div>: <span id="prevDiv"></span></div>
+                    
+                    <div class="font-bold">BUREAU/SERVICE</div>
+                    <div>: <span id="prevService">Information and Communications Technology Service</span></div>
+                    
+                    <div class="font-bold">Date/s Covered</div>
+                    <div class="font-bold">: <span id="prevPeriod"></span></div>
+                </div>
+
+                <table class="paper-table">
+                    <thead>
+                        <tr>
+                            <!-- Changed width from 35% to 25% as requested -->
+                            <th style="width: 25%;">Date and Actual Time logs</th>
+                            <th>Actual Accomplishments</th>
+                            <th class="no-print w-10">Act</th>
+                        </tr>
+                    </thead>
+                    <tbody id="entriesTableBody">
+                        <!-- Entries go here -->
+                        <tr>
+                            <td colspan="3" class="text-center text-gray-400 italic py-4">No entries added yet.</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="mt-12 flex justify-between text-sm px-4">
+                    <div class="w-1/2 pr-4">
+                        <p class="mb-8">Submitted by:</p>
+                        <p class="font-bold uppercase border-b border-black inline-block min-w-[200px]" id="prevSubmitName"></p>
+                        <p id="prevSubmitPos"></p>
+                        <p id="prevSubmitDiv"></p>
+                        <p class="mt-2">Date: <span id="prevSubmitDate" class="border-b border-black min-w-[100px] inline-block"></span></p>
+                    </div>
+                    <div class="w-1/2 pl-4">
+                        <p class="mb-8">Attested by:</p>
+                        <p class="font-bold uppercase border-b border-black inline-block min-w-[200px]" id="prevAttestName"></p>
+                        <p id="prevAttestPos"></p>
+                        <!-- ADDED: Attested Office Display -->
+                        <p id="prevAttestDiv"></p>
+                        <p class="mt-2">Date: <span id="prevAttestDate" class="border-b border-black min-w-[100px] inline-block"></span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Modal (Hidden by default) -->
+        <div id="historyModal" class="fixed inset-0 bg-slate-900 bg-opacity-75 z-50 hidden flex items-center justify-center backdrop-blur-sm">
+            <div class="bg-white rounded-lg p-6 w-11/12 max-w-lg shadow-2xl">
+                <div class="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
+                    <h3 class="text-lg font-bold text-slate-800">Saved Reports History</h3>
+                    <button onclick="app.toggleHistory()" class="text-slate-400 hover:text-rose-500 transition"><i class="fas fa-times text-xl"></i></button>
+                </div>
+                
+                <div class="flex justify-end gap-2 mb-3">
+                    <button onclick="app.exportHistory()" class="btn-tooltip bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-blue-700 transition" data-tooltip="Download all history as a backup file">
+                        <i class="fas fa-download mr-1"></i> Backup (JSON)
+                    </button>
+                    <button onclick="document.getElementById('importJson').click()" class="btn-tooltip bg-indigo-600 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-indigo-700 transition" data-tooltip="Restore history from a backup file">
+                        <i class="fas fa-upload mr-1"></i> Restore (JSON)
+                    </button>
+                    <input type="file" id="importJson" accept=".json" class="hidden" onchange="app.importHistory(this)">
+                </div>
+
+                <div id="historyList" class="space-y-2 max-h-60 overflow-y-auto border-t border-slate-100 pt-2">
+                    <!-- History items -->
+                </div>
+                <div class="mt-4 pt-4 border-t border-slate-100 text-right">
+                    <button onclick="app.clearHistory()" class="text-rose-600 text-sm hover:underline mr-4 font-medium">Clear All</button>
+                    <button onclick="app.toggleHistory()" class="bg-slate-200 text-slate-700 px-4 py-2 rounded text-sm font-medium hover:bg-slate-300 transition">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- User Guide Modal (NEW) -->
+        <div id="guideModal" class="fixed inset-0 bg-slate-900 bg-opacity-75 z-50 hidden flex items-center justify-center backdrop-blur-sm">
+            <div class="bg-white rounded-xl shadow-2xl w-11/12 max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+                <!-- Header -->
+                <div class="bg-emerald-600 text-white p-4 flex justify-between items-center shadow-md">
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-book-open text-xl"></i>
+                        <h2 class="text-lg font-bold">User Guide</h2>
+                    </div>
+                    <button onclick="app.toggleGuide()" class="text-white hover:text-slate-200 transition">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+
+                <!-- Content -->
+                <div class="p-6 overflow-y-auto space-y-8 bg-slate-50 text-slate-700 text-sm leading-relaxed">
+                    
+                    <!-- Intro -->
+                    <div>
+                        <p class="text-base font-semibold text-slate-800 mb-2">Welcome to the DepEd IDLAR Generator!</p>
+                        <p>This tool helps you create your "Individual Daily Log and Accomplishment Report" (Annex D) quickly and easily. Follow the steps below to generate your report.</p>
+                    </div>
+
+                    <!-- Step 1 -->
+                    <div class="flex gap-4">
+                        <div class="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">1</div>
+                        <div>
+                            <h3 class="font-bold text-slate-800 text-base mb-1">Fill Out Personnel Info</h3>
+                            <p class="mb-2">On the left panel, look for the <strong>Personnel Info</strong> section.</p>
+                            <ul class="list-disc list-inside space-y-1 ml-1 text-slate-600">
+                                <li>Enter your <strong>Name</strong> and <strong>Position</strong>.</li>
+                                <li>Select your <strong>Service</strong> and <strong>Division</strong> from the dropdowns.</li>
+                                <li>Select the <strong>Month and Year</strong> you are reporting for (e.g., October 2025).</li>
+                            </ul>
+                            <p class="mt-2 text-xs italic text-blue-600"><i class="fas fa-info-circle mr-1"></i>The document preview on the right updates automatically as you type!</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="flex gap-4">
+                        <div class="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">2</div>
+                        <div>
+                            <h3 class="font-bold text-slate-800 text-base mb-1">Log Your Daily Entries</h3>
+                            <p class="mb-2">Go to the <strong>Daily Log Entry</strong> section to record your Work-From-Home days.</p>
+                            <ol class="list-decimal list-inside space-y-2 ml-1 text-slate-600">
+                                <li>Select the <strong>Date WFH</strong>.</li>
+                                <li>Set your <strong>Time In</strong> and <strong>Time Out</strong>. You can use the Play <i class="fas fa-play text-emerald-600 text-xs"></i> and Stop <i class="fas fa-stop text-rose-600 text-xs"></i> buttons to quickly set the current time.</li>
+                                <li><strong>Add Accomplishments:</strong> Type a task in the box (e.g., "Attended meeting") and press <strong>Enter</strong> or click <strong>Add</strong>. You can add multiple tasks for one day.</li>
+                                <li><strong>Finalize Entry:</strong> Once the list looks good, click the big blue button: <span class="bg-blue-600 text-white px-2 py-0.5 rounded text-xs">Add Entry to Report</span>.</li>
+                            </ol>
+                            <p class="mt-2 text-xs italic text-slate-500">Your entry will appear in the table on the right. You can delete incorrect entries using the trash icon <i class="fas fa-trash text-rose-500"></i>.</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="flex gap-4">
+                        <div class="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">3</div>
+                        <div>
+                            <h3 class="font-bold text-slate-800 text-base mb-1">Add Signatories</h3>
+                            <p>Scroll down to the <strong>Signatories</strong> section.</p>
+                            <ul class="list-disc list-inside space-y-1 ml-1 text-slate-600">
+                                <li>Enter the <strong>Submission Date</strong> (when you submit the report).</li>
+                                <li>Enter the details of the person <strong>Attesting</strong> (approving) your report (Name, Position, Office).</li>
+                                <li>Enter the <strong>Date Signed</strong> by the attestor.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Step 4 -->
+                    <div class="flex gap-4">
+                        <div class="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">4</div>
+                        <div>
+                            <h3 class="font-bold text-slate-800 text-base mb-1">Save & Export</h3>
+                            <p class="mb-2">Use the buttons at the bottom of the left panel:</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                <div class="bg-white border p-2 rounded flex items-center gap-2">
+                                    <i class="fas fa-save text-slate-700 text-lg"></i>
+                                    <div><strong>Save Draft:</strong><br>Saves your current work to your browser so you can continue later.</div>
+                                </div>
+                                <div class="bg-white border p-2 rounded flex items-center gap-2">
+                                    <i class="fas fa-file-pdf text-rose-700 text-lg"></i>
+                                    <div><strong>Download PDF:</strong><br>Generates the official Annex D PDF file for printing/submission.</div>
+                                </div>
+                                <div class="bg-white border p-2 rounded flex items-center gap-2 sm:col-span-2">
+                                    <i class="fas fa-file-excel text-emerald-700 text-lg"></i>
+                                    <div><strong>Export Excel:</strong><br>Downloads a spreadsheet version of your logs for your own records.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                     <!-- Step 5 -->
+                     <div class="flex gap-4">
+                        <div class="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">5</div>
+                        <div>
+                            <h3 class="font-bold text-slate-800 text-base mb-1">History & Backup</h3>
+                            <p>Click the <strong>History</strong> button in the top menu bar to view past saved reports. You can also "Backup" your history to a file on your computer and "Restore" it later if you switch devices.</p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Footer -->
+                <div class="bg-slate-100 p-4 border-t border-slate-200 text-right">
+                    <button onclick="app.toggleGuide()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded font-medium transition shadow-sm">
+                        Got it!
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Global Tooltip Portal -->
+        <div id="tooltip-portal" class="fixed z-50 hidden bg-slate-800 text-white text-xs p-2.5 rounded shadow-xl max-w-xs pointer-events-none transition-opacity duration-200 leading-relaxed border border-slate-600"></div>
+
+    </div>
+
+    <script>
+        const app = {
+            data: {
+                entries: [],
+                profile: {}
+            },
+            
+            // Temporary state for the accomplishment list builder
+            tempAccomplishments: [],
+
+            services: {
+                "Information and Communications Technology Service": [
+                    "Solutions Development Division",
+                    "User Support Division",
+                    "Technology Infrastructure Division",
+                    "Office of the Director"
+                ],
+                "Office of the Assistant Secretary for Information and Communications Technology": [
+                    "OASICT Proper"
+                ]
+            },
+
+            init() {
+                this.generateYearOptions(); // Build year dropdown
+                this.handleServiceChange(); // Init divisions
+                this.initTooltips(); // Start tooltip logic
+                
+                // Load last draft if available
+                const saved = localStorage.getItem('currentDraft');
+                if (saved) {
+                    this.data = JSON.parse(saved);
+                    this.loadToForm();
+                } else {
+                    // Set default month/year
+                    const now = new Date();
+                    const monthStr = String(now.getMonth() + 1).padStart(2, '0');
+                    const yearStr = String(now.getFullYear());
+                    
+                    document.getElementById('selMonth').value = monthStr;
+                    document.getElementById('selYear').value = yearStr;
+                    
+                    this.handleMonthChange();
+                }
+                this.updatePreview();
+            },
+
+            generateYearOptions() {
+                const yearSelect = document.getElementById('selYear');
+                yearSelect.innerHTML = '';
+                // Generate from 2025 to 2035
+                for(let y = 2025; y <= 2035; y++) {
+                    const opt = document.createElement('option');
+                    opt.value = y;
+                    opt.textContent = y;
+                    yearSelect.appendChild(opt);
+                }
+            },
+
+            initTooltips() {
+                const portal = document.getElementById('tooltip-portal');
+                
+                document.querySelectorAll('.help-icon').forEach(icon => {
+                    icon.addEventListener('mouseenter', () => {
+                        const content = icon.querySelector('.help-content');
+                        if(!content) return;
+                        
+                        portal.textContent = content.textContent;
+                        portal.classList.remove('hidden');
+                        
+                        const iconRect = icon.getBoundingClientRect();
+                        const tooltipRect = portal.getBoundingClientRect();
+                        const viewportWidth = window.innerWidth;
+                        const viewportHeight = window.innerHeight;
+                        const gap = 10;
+
+                        // Default Preference: Right
+                        let left = iconRect.right + gap;
+                        let top = iconRect.top + (iconRect.height / 2) - (tooltipRect.height / 2);
+
+                        // 1. Check Horizontal Overflow (Right Side)
+                        if (left + tooltipRect.width > viewportWidth - gap) {
+                            // Try Left Side
+                            left = iconRect.left - tooltipRect.width - gap;
+                        }
+
+                        // 2. Check Horizontal Overflow (Left Side - if it flipped too far)
+                        if (left < gap) {
+                            // Try Bottom
+                            left = iconRect.left + (iconRect.width / 2) - (tooltipRect.width / 2);
+                            top = iconRect.bottom + gap;
+                        }
+
+                        // 3. Check Vertical Overflow (Bottom)
+                        if (top + tooltipRect.height > viewportHeight - gap) {
+                            // Shift Up
+                            top = viewportHeight - tooltipRect.height - gap;
+                        }
+
+                        // 4. Check Vertical Overflow (Top)
+                        if (top < gap) {
+                            top = gap;
+                        }
+
+                        // Final Clamp
+                        if (left < gap) left = gap;
+                        if (left + tooltipRect.width > viewportWidth - gap) left = viewportWidth - tooltipRect.width - gap;
+
+                        portal.style.top = `${top}px`;
+                        portal.style.left = `${left}px`;
+                    });
+                    
+                    icon.addEventListener('mouseleave', () => {
+                        portal.classList.add('hidden');
+                    });
+                });
+            },
+
+            // --- Formatting Helpers ---
+            
+            formatDateMMDDYYYY(dateStr) {
+                if (!dateStr) return '';
+                const parts = dateStr.split('-'); // expects YYYY-MM-DD
+                if (parts.length !== 3) return dateStr;
+                return `${parts[1]}/${parts[2]}/${parts[0]}`;
+            },
+
+            // --- Form Handling ---
+            
+            handleServiceChange() {
+                const serviceSelect = document.getElementById('service');
+                const divisionSelect = document.getElementById('division');
+                const selectedService = serviceSelect.value;
+                
+                divisionSelect.innerHTML = '';
+                
+                const divisions = this.services[selectedService] || [];
+                divisions.forEach(div => {
+                    const opt = document.createElement('option');
+                    opt.value = div;
+                    opt.textContent = div;
+                    divisionSelect.appendChild(opt);
+                });
+                
+                this.updatePreview();
+            },
+
+            handleMonthChange() {
+                const month = document.getElementById('selMonth').value;
+                const year = document.getElementById('selYear').value;
+                const monthVal = `${year}-${month}`; // Construct YYYY-MM for logic
+
+                if (!month || !year) return;
+
+                const date = new Date(year, parseInt(month) - 1, 1);
+                const monthName = date.toLocaleString('default', { month: 'long' });
+                const lastDay = new Date(year, parseInt(month), 0).getDate();
+                
+                const periodString = `${monthName} 1-${lastDay}, ${year}`;
+                document.getElementById('prevPeriod').textContent = periodString;
+                
+                // Default the entry date
+                const today = new Date();
+                const currentMonthStr = today.toISOString().slice(0,7);
+                
+                if (currentMonthStr === monthVal) {
+                    document.getElementById('entryDate').valueAsDate = today;
+                } else {
+                    document.getElementById('entryDate').value = `${monthVal}-01`;
+                }
+
+                this.updatePreview();
+            },
+
+            setCurrentTime(fieldId) {
+                const now = new Date();
+                const timeStr = now.toTimeString().slice(0, 5); // HH:MM
+                document.getElementById(fieldId).value = timeStr;
+            },
+
+            updatePreview() {
+                // Profile
+                const fname = document.getElementById('firstName').value || '';
+                const mname = document.getElementById('middleInit').value || '';
+                const lname = document.getElementById('lastName').value || '';
+                const fullname = `${fname} ${mname} ${lname}`.trim();
+                
+                document.getElementById('prevName').textContent = fullname;
+                document.getElementById('prevSubmitName').textContent = fullname;
+                
+                const pos = document.getElementById('position').value || '';
+                document.getElementById('prevPos').textContent = pos;
+                document.getElementById('prevSubmitPos').textContent = pos;
+
+                const service = document.getElementById('service').value;
+                document.getElementById('prevService').textContent = service;
+
+                const div = document.getElementById('division').value;
+                document.getElementById('prevDiv').textContent = div;
+                document.getElementById('prevSubmitDiv').textContent = div;
+
+                // Dates - Convert YYYY-MM-DD to MM/DD/YYYY
+                const subDate = document.getElementById('submitDate').value;
+                document.getElementById('prevSubmitDate').textContent = this.formatDateMMDDYYYY(subDate);
+
+                const attestName = document.getElementById('attestedName').value;
+                document.getElementById('prevAttestName').textContent = attestName;
+                
+                const attestPos = document.getElementById('attestedPos').value;
+                document.getElementById('prevAttestPos').textContent = attestPos;
+                
+                const attestOffice = document.getElementById('attestedOffice').value; // Get value
+                document.getElementById('prevAttestDiv').textContent = attestOffice; // Set value
+                
+                const attestDate = document.getElementById('attestedDate').value;
+                document.getElementById('prevAttestDate').textContent = this.formatDateMMDDYYYY(attestDate);
+
+                this.renderTable();
+                this.saveDraft();
+            },
+
+            // --- Entry Management ---
+
+            handleAccEnter(event) {
+                if (event.key === 'Enter') {
+                    this.addTempAcc();
+                }
+            },
+
+            addTempAcc() {
+                const input = document.getElementById('accInput');
+                const val = input.value.trim();
+                if (val) {
+                    this.tempAccomplishments.push(val);
+                    input.value = '';
+                    this.renderTempAccList();
+                }
+            },
+
+            removeTempAcc(index) {
+                this.tempAccomplishments.splice(index, 1);
+                this.renderTempAccList();
+            },
+
+            renderTempAccList() {
+                const list = document.getElementById('tempAccList');
+                list.innerHTML = '';
+                this.tempAccomplishments.forEach((acc, index) => {
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-start bg-white p-2 rounded border border-slate-200';
+                    li.innerHTML = `
+                        <span class="text-slate-700">• ${acc}</span>
+                        <button onclick="app.removeTempAcc(${index})" class="text-rose-500 hover:text-rose-700 ml-2 px-1 transition">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+                    list.appendChild(li);
+                });
+            },
+
+            addEntry() {
+                const date = document.getElementById('entryDate').value;
+                const timeIn = document.getElementById('entryTimeIn').value;
+                const timeOut = document.getElementById('entryTimeOut').value;
+                
+                if (!date || !timeIn || !timeOut) {
+                    alert("Please fill in Date, Time In, and Time Out.");
+                    return;
+                }
+                
+                if (this.tempAccomplishments.length === 0) {
+                    alert("Please add at least one accomplishment.");
+                    return;
+                }
+
+                // Format Date for display MM/DD/YYYY
+                const dateDisplay = this.formatDateMMDDYYYY(date);
+
+                // Format Time to 12h AM/PM
+                const formatTime = (t) => {
+                    const [h, m] = t.split(':');
+                    const d = new Date();
+                    d.setHours(h);
+                    d.setMinutes(m);
+                    // Force en-US locale and force UPPERCASE
+                    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toUpperCase();
+                };
+
+                const newEntry = {
+                    id: Date.now(),
+                    rawDate: date,
+                    displayDate: dateDisplay,
+                    timeIn: formatTime(timeIn),
+                    timeOut: formatTime(timeOut),
+                    accomplishments: [...this.tempAccomplishments] // Copy array
+                };
+
+                // Sort entries by date
+                this.data.entries.push(newEntry);
+                this.data.entries.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
+                
+                // Clear inputs
+                this.tempAccomplishments = [];
+                this.renderTempAccList();
+                document.getElementById('entryTimeIn').value = '';
+                document.getElementById('entryTimeOut').value = '';
+
+                this.updatePreview();
+            },
+
+            removeEntry(id) {
+                this.data.entries = this.data.entries.filter(e => e.id !== id);
+                this.updatePreview();
+            },
+
+            renderTable() {
+                const tbody = document.getElementById('entriesTableBody');
+                tbody.innerHTML = '';
+
+                if (this.data.entries.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="3" class="text-center text-gray-400 italic py-4">No entries added yet.</td></tr>`;
+                    return;
+                }
+
+                this.data.entries.forEach(entry => {
+                    // Convert array to bullet list
+                    const accHtml = entry.accomplishments.map(line => `• ${line}`).join('<br>');
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>
+                            <div class="font-bold mb-1">${entry.displayDate}</div>
+                            <div class="text-xs">Time-in: ${entry.timeIn}</div>
+                            <div class="text-xs">Time-out: ${entry.timeOut}</div>
+                        </td>
+                        <td>${accHtml}</td>
+                        <td class="no-print text-center align-middle">
+                            <button onclick="app.removeEntry(${entry.id})" class="text-rose-500 hover:text-rose-700 p-2 transition">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            },
+
+            // --- Storage & Backup ---
+
+            saveDraft() {
+                // Collect form data
+                // Combine dropdowns to store uniform ID (YYYY-MM)
+                const month = document.getElementById('selMonth').value;
+                const year = document.getElementById('selYear').value;
+                const monthCovered = `${year}-${month}`;
+
+                this.data.profile = {
+                    firstName: document.getElementById('firstName').value,
+                    middleInit: document.getElementById('middleInit').value,
+                    lastName: document.getElementById('lastName').value,
+                    position: document.getElementById('position').value,
+                    service: document.getElementById('service').value,
+                    division: document.getElementById('division').value,
+                    monthCovered: monthCovered,
+                    submitDate: document.getElementById('submitDate').value,
+                    attestedName: document.getElementById('attestedName').value,
+                    attestedPos: document.getElementById('attestedPos').value,
+                    attestedOffice: document.getElementById('attestedOffice').value, // Save Office
+                    attestedDate: document.getElementById('attestedDate').value,
+                };
+                localStorage.setItem('currentDraft', JSON.stringify(this.data));
+            },
+
+            loadToForm() {
+                const p = this.data.profile;
+                if (!p) return;
+                if(p.firstName) document.getElementById('firstName').value = p.firstName;
+                if(p.middleInit) document.getElementById('middleInit').value = p.middleInit;
+                if(p.lastName) document.getElementById('lastName').value = p.lastName;
+                if(p.position) document.getElementById('position').value = p.position;
+                if(p.service) {
+                     document.getElementById('service').value = p.service;
+                     this.handleServiceChange(); // Re-populate divisions based on saved service
+                }
+                if(p.division) document.getElementById('division').value = p.division;
+                
+                if(p.monthCovered) {
+                    const [y, m] = p.monthCovered.split('-');
+                    document.getElementById('selYear').value = y;
+                    document.getElementById('selMonth').value = m;
+                    this.handleMonthChange();
+                }
+                
+                if(p.submitDate) document.getElementById('submitDate').value = p.submitDate;
+                if(p.attestedName) document.getElementById('attestedName').value = p.attestedName;
+                if(p.attestedPos) document.getElementById('attestedPos').value = p.attestedPos;
+                if(p.attestedOffice) document.getElementById('attestedOffice').value = p.attestedOffice; // Load Office
+                if(p.attestedDate) document.getElementById('attestedDate').value = p.attestedDate;
+            },
+
+            saveReport() {
+                let history = JSON.parse(localStorage.getItem('reportHistory') || '[]');
+                const month = document.getElementById('selMonth').value;
+                const year = document.getElementById('selYear').value;
+                const monthCovered = `${year}-${month}`;
+
+                const title = `${monthCovered} - ${this.data.profile.lastName || 'User'}`;
+                
+                history = history.filter(h => h.id !== monthCovered);
+                
+                history.push({
+                    id: monthCovered || Date.now(),
+                    title: title,
+                    data: this.data,
+                    dateSaved: new Date().toLocaleString()
+                });
+                
+                localStorage.setItem('reportHistory', JSON.stringify(history));
+                alert('Report Saved to History!');
+                this.refreshHistoryList();
+            },
+
+            exportHistory() {
+                const historyStr = localStorage.getItem('reportHistory');
+                if(!historyStr || historyStr === '[]') {
+                    alert("No history to backup.");
+                    return;
+                }
+                
+                const blob = new Blob([historyStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const date = new Date().toISOString().split('T')[0];
+                a.download = `IDLAR_History_Backup_${date}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            },
+
+            importHistory(input) {
+                const file = input.files[0];
+                if(!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const imported = JSON.parse(e.target.result);
+                        if(!Array.isArray(imported)) throw new Error("Invalid format");
+                        
+                        let current = JSON.parse(localStorage.getItem('reportHistory') || '[]');
+                        let count = 0;
+                        imported.forEach(newItem => {
+                            current = current.filter(oldItem => oldItem.id !== newItem.id);
+                            current.push(newItem);
+                            count++;
+                        });
+                        
+                        localStorage.setItem('reportHistory', JSON.stringify(current));
+                        alert(`Successfully restored ${count} reports.`);
+                        this.refreshHistoryList();
+                    } catch(err) {
+                        alert("Error importing file. Please ensure it is a valid IDLAR JSON backup.");
+                        console.error(err);
+                    }
+                    input.value = ''; // reset input
+                };
+                reader.readAsText(file);
+            },
+
+            refreshHistoryList() {
+                const list = document.getElementById('historyList');
+                const history = JSON.parse(localStorage.getItem('reportHistory') || '[]');
+                list.innerHTML = '';
+                if(history.length === 0) {
+                    list.innerHTML = '<div class="text-slate-500 text-sm italic">No saved reports found.</div>';
+                } else {
+                    history.sort((a,b) => new Date(b.dateSaved) - new Date(a.dateSaved)).forEach(h => {
+                        const div = document.createElement('div');
+                        div.className = 'flex justify-between items-center bg-slate-50 p-3 rounded border border-slate-200 hover:bg-slate-100 transition';
+                        div.innerHTML = `
+                            <div>
+                                <div class="font-bold text-sm text-slate-800">${h.title}</div>
+                                <div class="text-xs text-slate-500"><i class="fas fa-clock mr-1"></i>${h.dateSaved}</div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button class="text-blue-600 text-xs font-semibold hover:underline" onclick='app.loadHistoryItem(${JSON.stringify(h.data)})'>LOAD</button>
+                            </div>
+                        `;
+                        list.appendChild(div);
+                    });
+                }
+            },
+
+            toggleHistory() {
+                const modal = document.getElementById('historyModal');
+                
+                if (modal.classList.contains('hidden')) {
+                    modal.classList.remove('hidden');
+                    this.refreshHistoryList();
+                } else {
+                    modal.classList.add('hidden');
+                }
+            },
+            
+            toggleGuide() {
+                const modal = document.getElementById('guideModal');
+                
+                if (modal.classList.contains('hidden')) {
+                    modal.classList.remove('hidden');
+                } else {
+                    modal.classList.add('hidden');
+                }
+            },
+
+            loadHistoryItem(data) {
+                if(confirm("Load this report? Unsaved changes in current form will be lost.")) {
+                    this.data = data;
+                    this.loadToForm();
+                    this.updatePreview();
+                    this.toggleHistory();
+                }
+            },
+            
+            clearHistory() {
+                if(confirm("Clear all history? This cannot be undone.")) {
+                    localStorage.removeItem('reportHistory');
+                    this.refreshHistoryList();
+                }
+            },
+
+            resetForm() {
+                if(confirm("Start a new report?")) {
+                    this.data.entries = [];
+                    this.renderTable();
+                    localStorage.removeItem('currentDraft');
+                }
+            },
+
+            // --- Export ---
+
+            downloadPDF() {
+                const element = document.getElementById('reportPreview');
+                const originalMinHeight = element.style.minHeight;
+                element.style.minHeight = 'auto';
+
+                const opt = {
+                    margin:       0.2, // inches
+                    filename:     `IDLAR_${this.data.profile.lastName || 'User'}_${this.data.profile.monthCovered || 'Report'}.pdf`,
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2 },
+                    jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+                };
+                
+                document.querySelectorAll('.no-print').forEach(el => el.style.display = 'none');
+                
+                html2pdf().set(opt).from(element).save().then(() => {
+                    document.querySelectorAll('.no-print').forEach(el => el.style.display = '');
+                    element.style.minHeight = originalMinHeight;
+                });
+            },
+
+            downloadXLSX() {
+                if (this.data.entries.length === 0) {
+                    alert("No entries to export.");
+                    return;
+                }
+
+                const rows = this.data.entries.map(e => ({
+                    "Date": e.displayDate,
+                    "Time In": e.timeIn,
+                    "Time Out": e.timeOut,
+                    "Accomplishments": e.accomplishments.join("\n")
+                }));
+
+                const worksheet = XLSX.utils.json_to_sheet(rows);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "Accomplishments");
+                
+                XLSX.writeFile(workbook, `IDLAR_${this.data.profile.lastName}_${this.data.profile.monthCovered}.xlsx`);
+            }
+        };
+
+        window.onload = () => app.init();
+    </script>
+</body>
+</html>
